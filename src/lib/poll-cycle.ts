@@ -1,15 +1,13 @@
-import { homedir } from 'os';
-import { join } from 'path';
 import { groupNewComments, extractNewCommentIds } from './grouping.js';
 import { buildPrompt } from './prompt.js';
-import type { GitHubFetcher, PRInfo, State, InvokePi } from '../types.js';
+import type { GitHubFetcher, PRInfo, State, InvokePi, PollCycleResult } from '../types.js';
 
-export function sessionId(pr: PRInfo): string {
+export function windowName(pr: PRInfo): string {
   return `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
 }
 
-export function skillPath(): string {
-  return join(homedir(), '.loops', 'skills', 'pr-review', 'SKILL.md');
+export function skillName(): string {
+  return 'address-pr-comments';
 }
 
 export async function processPollCycle(
@@ -18,7 +16,7 @@ export async function processPollCycle(
   state: State,
   invokePi: InvokePi,
   cwd: string,
-): Promise<State> {
+): Promise<PollCycleResult> {
   const [reviewComments, issueComments, reviews] = await Promise.all([
     fetcher.listReviewComments(pr.owner, pr.repo, pr.number),
     fetcher.listIssueComments(pr.owner, pr.repo, pr.number),
@@ -27,21 +25,26 @@ export async function processPollCycle(
 
   const batches = groupNewComments(reviewComments, issueComments, reviews, state);
 
+  const newIds = extractNewCommentIds(batches);
+
   if (batches.length === 0) {
-    return state;
+    return { state, newCommentCount: 0, dispatchedAgentCount: 0 };
   }
 
-  const sid = sessionId(pr);
-  const skill = skillPath();
+  const window = windowName(pr);
+  const skill = skillName();
 
   for (const batch of batches) {
     const prompt = buildPrompt(pr, batch);
-    await invokePi(sid, skill, prompt, cwd);
+    await invokePi(window, skill, prompt, cwd);
   }
 
-  const newIds = extractNewCommentIds(batches);
   return {
-    seenCommentIds: [...state.seenCommentIds, ...newIds],
-    seenReviewIds: state.seenReviewIds,
+    state: {
+      seenCommentIds: [...state.seenCommentIds, ...newIds],
+      seenReviewIds: state.seenReviewIds,
+    },
+    newCommentCount: newIds.length,
+    dispatchedAgentCount: batches.length,
   };
 }

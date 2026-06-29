@@ -25,10 +25,14 @@ export async function prWatch(prUrl: string): Promise<void> {
   const poll = async () => {
     let state = await loadState(statePath);
     try {
-      const updated = await processPollCycle(fetcher, prInfo, state, invokePi, cwd);
-      if (updated !== state) {
-        await saveState(statePath, updated);
-        state = updated;
+      const result = await processPollCycle(fetcher, prInfo, state, invokePi, cwd);
+      console.log(`Found ${result.newCommentCount} new comment(s)`);
+      if (result.dispatchedAgentCount > 0) {
+        console.log(`Successfully sent ${result.dispatchedAgentCount} agent(s) out`);
+      }
+      if (result.state !== state) {
+        await saveState(statePath, result.state);
+        state = result.state;
       }
     } catch (err) {
       console.error('Poll cycle error:', err);

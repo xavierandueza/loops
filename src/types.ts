@@ -55,9 +55,15 @@ export type IssueBatch = {
 
 export type CommentBatch = ReviewBatch | IssueBatch;
 
+export type PollCycleResult = {
+  state: State;
+  newCommentCount: number;
+  dispatchedAgentCount: number;
+};
+
 export type InvokePi = (
-  sessionId: string,
-  skillPath: string,
+  windowName: string,
+  skillName: string,
   prompt: string,
   cwd: string,
 ) => Promise<void>;

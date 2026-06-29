@@ -88,27 +88,27 @@ describe('processPollCycle', () => {
     expect(invokePi).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the deterministic session ID for every invocation', async () => {
+  it('uses the deterministic window name and address-pr-comments skill for every invocation', async () => {
     const fetcher = makeFetcher({
       listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(10)]),
     });
-    const expectedSessionId = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
+    const expectedWindowName = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
 
     await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
 
     expect(invokePi).toHaveBeenCalledWith(
-      expectedSessionId,
-      expect.any(String),
+      expectedWindowName,
+      'address-pr-comments',
       expect.any(String),
       '/cwd',
     );
   });
 
-  it('uses the same session ID on a second invocation (session resumption)', async () => {
+  it('uses the same window name on a second invocation', async () => {
     const fetcher = makeFetcher({
       listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(10)]),
     });
-    const expectedSessionId = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
+    const expectedWindowName = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
     const state: State = { seenCommentIds: [], seenReviewIds: [] };
 
     await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
@@ -122,8 +122,8 @@ describe('processPollCycle', () => {
 
     expect(invokePi).toHaveBeenCalledTimes(2);
     const [firstCall, secondCall] = (invokePi as ReturnType<typeof vi.fn>).mock.calls;
-    expect(firstCall[0]).toBe(expectedSessionId);
-    expect(secondCall[0]).toBe(expectedSessionId);
+    expect(firstCall[0]).toBe(expectedWindowName);
+    expect(secondCall[0]).toBe(expectedWindowName);
   });
 
   it('returns updated state with newly seen comment IDs', async () => {
@@ -131,10 +131,26 @@ describe('processPollCycle', () => {
       listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(10), makeIssueComment(11)]),
     });
 
-    const newState = await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
+    const result = await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
 
-    expect(newState.seenCommentIds).toContain(10);
-    expect(newState.seenCommentIds).toContain(11);
+    expect(result.state.seenCommentIds).toContain(10);
+    expect(result.state.seenCommentIds).toContain(11);
+  });
+
+  it('returns poll metadata', async () => {
+    const fetcher = makeFetcher({
+      listReviewComments: vi.fn().mockResolvedValue([
+        makeReviewComment(1, 10),
+        makeReviewComment(2, 10),
+      ]),
+      listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(11)]),
+      listReviews: vi.fn().mockResolvedValue([makeReview(10)]),
+    });
+
+    const result = await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
+
+    expect(result.newCommentCount).toBe(3);
+    expect(result.dispatchedAgentCount).toBe(2);
   });
 
   it('does not re-process comments seen in a previous cycle', async () => {
