@@ -6,6 +6,10 @@ export function windowName(pr: PRInfo): string {
   return `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
 }
 
+export function sessionId(pr: PRInfo): string {
+  return `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
+}
+
 export function skillName(): string {
   return 'address-pr-comments';
 }
@@ -32,11 +36,12 @@ export async function processPollCycle(
   }
 
   const window = windowName(pr);
+  const session = sessionId(pr);
   const skill = skillName();
 
   for (const batch of batches) {
     const prompt = buildPrompt(pr, batch);
-    await invokePi(window, skill, prompt, cwd);
+    await invokePi(window, session, skill, prompt, cwd);
   }
 
   return {

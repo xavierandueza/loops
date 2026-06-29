@@ -88,27 +88,30 @@ describe('processPollCycle', () => {
     expect(invokePi).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the deterministic window name and address-pr-comments skill for every invocation', async () => {
+  it('uses the deterministic window name, session ID, and address-pr-comments skill for every invocation', async () => {
     const fetcher = makeFetcher({
       listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(10)]),
     });
     const expectedWindowName = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
+    const expectedSessionId = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
 
     await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
 
     expect(invokePi).toHaveBeenCalledWith(
       expectedWindowName,
+      expectedSessionId,
       'address-pr-comments',
       expect.any(String),
       '/cwd',
     );
   });
 
-  it('uses the same window name on a second invocation', async () => {
+  it('uses the same window name and session ID on a second invocation', async () => {
     const fetcher = makeFetcher({
       listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(10)]),
     });
     const expectedWindowName = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
+    const expectedSessionId = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
     const state: State = { seenCommentIds: [], seenReviewIds: [] };
 
     await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
@@ -123,7 +126,9 @@ describe('processPollCycle', () => {
     expect(invokePi).toHaveBeenCalledTimes(2);
     const [firstCall, secondCall] = (invokePi as ReturnType<typeof vi.fn>).mock.calls;
     expect(firstCall[0]).toBe(expectedWindowName);
+    expect(firstCall[1]).toBe(expectedSessionId);
     expect(secondCall[0]).toBe(expectedWindowName);
+    expect(secondCall[1]).toBe(expectedSessionId);
   });
 
   it('returns updated state with newly seen comment IDs', async () => {
@@ -171,7 +176,7 @@ describe('processPollCycle', () => {
 
     await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
 
-    const prompt = (invokePi as ReturnType<typeof vi.fn>).mock.calls[0][2] as string;
+    const prompt = (invokePi as ReturnType<typeof vi.fn>).mock.calls[0][3] as string;
     expect(prompt).toContain(pr.title);
     expect(prompt).toContain(pr.url);
   });

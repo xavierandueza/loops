@@ -63,6 +63,7 @@ export type PollCycleResult = {
 
 export type InvokePi = (
   windowName: string,
+  sessionId: string,
   skillName: string,
   prompt: string,
   cwd: string,

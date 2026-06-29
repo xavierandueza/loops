@@ -20,7 +20,7 @@ src/
   lib/
     github.ts           — Octokit-backed GitHubFetcher + parsePRUrl
     grouping.ts         — Pure comment grouping logic (groupNewComments, extractNewCommentIds)
-    pi.ts               — invokePi: spawns `pix <window-name> "/skill:address-pr-comments <prompt>"`
+    pi.ts               — invokePi: spawns `pix --session-id <session-id> <window-name> "/skill:address-pr-comments <prompt>"`
     poll-cycle.ts       — processPollCycle: fetches, groups, invokes pi, returns updated state
     prompt.ts           — buildPrompt: constructs the structured pi prompt for a comment batch
     state.ts            — loadState / saveState: JSON persistence at ~/.loops/state/
@@ -63,10 +63,10 @@ The file is created on first run and updated after each batch is handed to pi. R
 
 Each comment batch becomes one pix invocation:
 ```
-pix loops-pr-{owner}-{repo}-{number} "/skill:address-pr-comments <structured prompt>"
+pix --session-id loops-pr-{owner}-{repo}-{number} loops-pr-{owner}-{repo}-{number} "/skill:address-pr-comments <structured prompt>"
 ```
 
-The window name is deterministic per PR. If a window already exists, pix creates a suffixed window.
+The session ID is deterministic per PR, so each dispatched pi agent continues the same session. The window name is also deterministic per PR. If a window already exists, pix creates a suffixed window.
 
 The `address-pr-comments` skill should be installed as a pi skill from `skills/address-pr-comments/SKILL.md`.
 

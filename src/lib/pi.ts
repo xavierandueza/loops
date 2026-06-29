@@ -1,10 +1,10 @@
 import { spawnSync } from 'child_process';
 import type { InvokePi } from '../types.js';
 
-export const invokePi: InvokePi = async (windowName, skillName, prompt, cwd) => {
+export const invokePi: InvokePi = async (windowName, sessionId, skillName, prompt, cwd) => {
   const result = spawnSync(
     'pix',
-    [windowName, `/skill:${skillName} ${prompt}`],
+    ['--session-id', sessionId, windowName, `/skill:${skillName} ${prompt}`],
     { cwd, stdio: 'inherit', encoding: 'utf8' },
   );
 
