@@ -20,13 +20,13 @@ src/
   lib/
     github.ts           — Octokit-backed GitHubFetcher + parsePRUrl
     grouping.ts         — Pure comment grouping logic (groupNewComments, extractNewCommentIds)
-    pi.ts               — invokePi: spawns `pi -p --session-id ... --skill ... "<prompt>"`
+    pi.ts               — invokePi: spawns `pix <window-name> "/skill:address-pr-comments <prompt>"`
     poll-cycle.ts       — processPollCycle: fetches, groups, invokes pi, returns updated state
     prompt.ts           — buildPrompt: constructs the structured pi prompt for a comment batch
     state.ts            — loadState / saveState: JSON persistence at ~/.loops/state/
   types.ts              — All shared types (State, PRInfo, CommentBatch, GitHubFetcher, InvokePi, …)
 skills/
-  pr-review/
+  address-pr-comments/
     SKILL.md            — Skill loaded into each pi invocation for pr-watch
 tests/
   state.test.ts         — State persistence tests
@@ -61,17 +61,14 @@ The file is created on first run and updated after each batch is handed to pi. R
 
 ## pi invocation
 
-Each comment batch becomes one pi invocation:
+Each comment batch becomes one pix invocation:
 ```
-pi -p \
-  --session-id loops-pr-{owner}-{repo}-{number} \
-  --skill ~/.loops/skills/pr-review/SKILL.md \
-  "<structured prompt>"
+pix loops-pr-{owner}-{repo}-{number} "/skill:address-pr-comments <structured prompt>"
 ```
 
-The session ID is deterministic — pi creates the session on first run and resumes it on all subsequent invocations for the same PR.
+The window name is deterministic per PR. If a window already exists, pix creates a suffixed window.
 
-The skill file is read from `~/.loops/skills/pr-review/SKILL.md`. This is installed by copying (or symlinking) `skills/pr-review/SKILL.md` from this repo.
+The `address-pr-comments` skill should be installed as a pi skill from `skills/address-pr-comments/SKILL.md`.
 
 ## Adding a new subcommand
 

@@ -1,4 +1,4 @@
-# Skill: pr-review
+# Skill: address-pr-comments
 
 You are operating as an autonomous PR review agent. You have been invoked by the `loops pr-watch` CLI because one or more new comments have appeared on a GitHub pull request. Your job is to read the comment(s), exercise judgment, and act.
 
