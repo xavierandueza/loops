@@ -169,6 +169,35 @@ describe('processPollCycle', () => {
     expect(invokePi).not.toHaveBeenCalled();
   });
 
+  it('does not invoke pi for issue comments marked as an agent response', async () => {
+    const agentComment = makeIssueComment(10);
+    agentComment.body = '(agent response)\nFixed this in the latest commit.';
+    const fetcher = makeFetcher({
+      listIssueComments: vi.fn().mockResolvedValue([agentComment]),
+    });
+
+    const result = await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
+
+    expect(invokePi).not.toHaveBeenCalled();
+    expect(result.state.seenCommentIds).toContain(10);
+    expect(result.skippedAgentResponseCount).toBe(1);
+  });
+
+  it('does not invoke pi for review batches marked as an agent response', async () => {
+    const agentReviewComment = makeReviewComment(10, 99);
+    agentReviewComment.body = '(agent response)\nHandled these review comments.';
+    const fetcher = makeFetcher({
+      listReviewComments: vi.fn().mockResolvedValue([agentReviewComment]),
+      listReviews: vi.fn().mockResolvedValue([makeReview(99)]),
+    });
+
+    const result = await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
+
+    expect(invokePi).not.toHaveBeenCalled();
+    expect(result.state.seenCommentIds).toContain(10);
+    expect(result.skippedAgentResponseCount).toBe(1);
+  });
+
   it('passes the prompt containing PR title and URL to pi', async () => {
     const fetcher = makeFetcher({
       listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(10)]),

@@ -59,6 +59,7 @@ export type PollCycleResult = {
   state: State;
   newCommentCount: number;
   dispatchedAgentCount: number;
+  skippedAgentResponseCount: number;
 };
 
 export type InvokePi = (
