@@ -27,6 +27,7 @@ Use the diff hunk for context on *what* the comment is about. Read the surroundi
 ## Responding to comments
 
 ALL Comments that are left MUST be responded to. For inline add a response.
+Use the GH CLI to do this.
 
 ## Reply format
 
