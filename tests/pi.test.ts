@@ -21,7 +21,8 @@ describe('invokePi', () => {
       '/repo',
     );
 
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(spawnSync).toHaveBeenNthCalledWith(
+      2,
       'pix',
       [
         '--session-id',
@@ -29,6 +30,34 @@ describe('invokePi', () => {
         'loops-pr-acme-myapp-42',
         '/skill:address-pr-comments Fix the thing',
       ],
+      { cwd: '/repo', stdio: 'inherit', encoding: 'utf8' },
+    );
+  });
+
+  it('posts the skill prompt to an existing tmux window instead of creating another one', async () => {
+    vi.mocked(spawnSync)
+      .mockReturnValueOnce({ status: 0, stdout: 'other-window\nloops-pr-acme-myapp-42\n' } as ReturnType<typeof spawnSync>)
+      .mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>);
+
+    await invokePi(
+      'loops-pr-acme-myapp-42',
+      'loops-pr-acme-myapp-42',
+      'address-pr-comments',
+      'Fix the thing',
+      '/repo',
+    );
+
+    expect(spawnSync).not.toHaveBeenCalledWith('pix', expect.anything(), expect.anything());
+    expect(spawnSync).toHaveBeenNthCalledWith(
+      2,
+      'tmux',
+      ['send-keys', '-l', '-t', 'loops-pr-acme-myapp-42', '/skill:address-pr-comments Fix the thing'],
+      { cwd: '/repo', stdio: 'inherit', encoding: 'utf8' },
+    );
+    expect(spawnSync).toHaveBeenNthCalledWith(
+      3,
+      'tmux',
+      ['send-keys', '-t', 'loops-pr-acme-myapp-42', 'Enter'],
       { cwd: '/repo', stdio: 'inherit', encoding: 'utf8' },
     );
   });

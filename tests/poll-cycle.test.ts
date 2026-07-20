@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { processPollCycle } from '../src/lib/poll-cycle.js';
-import type { GitHubFetcher, PRInfo, InvokePi, State } from '../src/types.js';
+import type { GitHubFetcher, PRInfo, InvokePi, State, ReviewComment } from '../src/types.js';
 
 const pr: PRInfo = {
   owner: 'acme',
@@ -13,9 +13,10 @@ const pr: PRInfo = {
 
 const emptyState: State = { seenCommentIds: [], seenReviewIds: [] };
 
-const makeReviewComment = (id: number, reviewId: number) => ({
+const makeReviewComment = (id: number, reviewId: number): ReviewComment => ({
   id,
   pull_request_review_id: reviewId,
+  in_reply_to_id: null,
   body: `comment ${id}`,
   path: 'src/foo.ts',
   line: 10,
@@ -155,7 +156,7 @@ describe('processPollCycle', () => {
     const result = await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
 
     expect(result.newCommentCount).toBe(3);
-    expect(result.dispatchedAgentCount).toBe(2);
+    expect(result.dispatchedAgentCount).toBe(1);
   });
 
   it('does not re-process comments seen in a previous cycle', async () => {
@@ -167,6 +168,29 @@ describe('processPollCycle', () => {
     await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
 
     expect(invokePi).not.toHaveBeenCalled();
+  });
+
+  it('ignores issue comments from configured agent accounts', async () => {
+    const ignoredComments = ['linear-code', 'github-actions', 'readme-ai-writer'].map((login, index) => {
+      const comment = makeIssueComment(10 + index);
+      comment.user = { login };
+      return comment;
+    });
+    const humanComment = makeIssueComment(20);
+    const fetcher = makeFetcher({
+      listIssueComments: vi.fn().mockResolvedValue([...ignoredComments, humanComment]),
+    });
+
+    const result = await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
+
+    expect(invokePi).toHaveBeenCalledTimes(1);
+    const prompt = (invokePi as ReturnType<typeof vi.fn>).mock.calls[0][3] as string;
+    expect(prompt).toContain('**Comment ID:** 20');
+    expect(prompt).not.toContain('**Comment ID:** 10');
+    expect(prompt).not.toContain('**Comment ID:** 11');
+    expect(prompt).not.toContain('**Comment ID:** 12');
+    expect(result.state.seenCommentIds).toEqual([10, 11, 12, 20]);
+    expect(result.skippedIgnoredCommentCount).toBe(3);
   });
 
   it('does not invoke pi for issue comments marked as an agent response', async () => {
@@ -181,6 +205,43 @@ describe('processPollCycle', () => {
     expect(invokePi).not.toHaveBeenCalled();
     expect(result.state.seenCommentIds).toContain(10);
     expect(result.skippedAgentResponseCount).toBe(1);
+  });
+
+  it('ignores reviews from configured agent accounts case-insensitively', async () => {
+    const review = makeReview(99);
+    review.user = { login: 'GitHub-Actions' };
+    const reviewComment = makeReviewComment(10, 99);
+    reviewComment.user = { login: 'GitHub-Actions' };
+    const fetcher = makeFetcher({
+      listReviewComments: vi.fn().mockResolvedValue([reviewComment]),
+      listReviews: vi.fn().mockResolvedValue([review]),
+    });
+
+    const result = await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
+
+    expect(invokePi).not.toHaveBeenCalled();
+    expect(result.state.seenCommentIds).toContain(10);
+    expect(result.skippedIgnoredCommentCount).toBe(1);
+  });
+
+  it('actions a human follow-up on a review created by an ignored agent', async () => {
+    const originalComment = makeReviewComment(10, 99);
+    originalComment.user = { login: 'github-actions' };
+    const humanReply = makeReviewComment(11, 99);
+    humanReply.in_reply_to_id = 10;
+    const review = makeReview(99);
+    review.user = { login: 'github-actions' };
+    const fetcher = makeFetcher({
+      listReviewComments: vi.fn().mockResolvedValue([originalComment, humanReply]),
+      listReviews: vi.fn().mockResolvedValue([review]),
+    });
+    const state: State = { seenCommentIds: [10], seenReviewIds: [] };
+
+    await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
+
+    expect(invokePi).toHaveBeenCalledTimes(1);
+    const prompt = (invokePi as ReturnType<typeof vi.fn>).mock.calls[0][3] as string;
+    expect(prompt).toContain('**Comment ID:** 11');
   });
 
   it('does not invoke pi for review batches marked as an agent response', async () => {
@@ -210,17 +271,61 @@ describe('processPollCycle', () => {
     expect(prompt).toContain(pr.url);
   });
 
-  it('invokes pi separately for two different reviews', async () => {
+  it('passes full inline thread context and marks old versus new comments', async () => {
+    const originalComment = makeReviewComment(10, 99);
+    originalComment.body = 'original concern';
+    const newReply = makeReviewComment(11, 99);
+    newReply.body = 'new reply with important context';
+    newReply.in_reply_to_id = 10;
+    const fetcher = makeFetcher({
+      listReviewComments: vi.fn().mockResolvedValue([originalComment, newReply]),
+      listReviews: vi.fn().mockResolvedValue([makeReview(99)]),
+    });
+    const state: State = { seenCommentIds: [10], seenReviewIds: [] };
+
+    await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
+
+    const prompt = (invokePi as ReturnType<typeof vi.fn>).mock.calls[0][3] as string;
+    expect(prompt).toContain('**Thread status:** OLD thread context');
+    expect(prompt).toContain('**Body:** original concern');
+    expect(prompt).toContain('**Thread status:** NEW comment to action');
+    expect(prompt).toContain('**Body:** new reply with important context');
+  });
+
+  it('still invokes pi when an old thread comment is an agent response but the new reply is not', async () => {
+    const originalComment = makeReviewComment(10, 99);
+    originalComment.body = '(agent response)\nPrevious agent reply.';
+    const newReply = makeReviewComment(11, 99);
+    newReply.body = 'human follow-up';
+    newReply.in_reply_to_id = 10;
+    const fetcher = makeFetcher({
+      listReviewComments: vi.fn().mockResolvedValue([originalComment, newReply]),
+      listReviews: vi.fn().mockResolvedValue([makeReview(99)]),
+    });
+    const state: State = { seenCommentIds: [10], seenReviewIds: [] };
+
+    await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
+
+    expect(invokePi).toHaveBeenCalledTimes(1);
+  });
+
+  it('batches different reviews and issue comments into one pi message', async () => {
     const fetcher = makeFetcher({
       listReviewComments: vi.fn().mockResolvedValue([
         makeReviewComment(1, 10),
         makeReviewComment(2, 20),
       ]),
+      listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(3)]),
       listReviews: vi.fn().mockResolvedValue([makeReview(10), makeReview(20)]),
     });
 
-    await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
+    const result = await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
 
-    expect(invokePi).toHaveBeenCalledTimes(2);
+    expect(invokePi).toHaveBeenCalledTimes(1);
+    const prompt = (invokePi as ReturnType<typeof vi.fn>).mock.calls[0][3] as string;
+    expect(prompt).toContain('**Review ID:** 10');
+    expect(prompt).toContain('**Review ID:** 20');
+    expect(prompt).toContain('**Comment ID:** 3');
+    expect(result.dispatchedAgentCount).toBe(1);
   });
 });

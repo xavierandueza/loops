@@ -1,4 +1,11 @@
-import type { ReviewComment, IssueComment, Review, State, CommentBatch } from '../types.js';
+import type {
+  ReviewComment,
+  ThreadedReviewComment,
+  IssueComment,
+  Review,
+  State,
+  CommentBatch,
+} from '../types.js';
 
 export function groupNewComments(
   reviewComments: ReviewComment[],
@@ -12,15 +19,27 @@ export function groupNewComments(
 
   const newReviewComments = reviewComments.filter((c) => !seenIds.has(c.id));
 
-  const byReviewId = new Map<number, ReviewComment[]>();
+  const byReviewId = new Map<number, Map<number, ThreadedReviewComment>>();
   for (const comment of newReviewComments) {
     if (comment.pull_request_review_id === null) continue;
-    const group = byReviewId.get(comment.pull_request_review_id) ?? [];
-    group.push(comment);
+
+    const threadRootId = comment.in_reply_to_id ?? comment.id;
+    const threadComments = reviewComments.filter(
+      (candidate) => candidate.id === threadRootId || candidate.in_reply_to_id === threadRootId,
+    );
+    const group = byReviewId.get(comment.pull_request_review_id) ?? new Map();
+
+    for (const threadComment of threadComments) {
+      group.set(threadComment.id, {
+        ...threadComment,
+        isNew: !seenIds.has(threadComment.id),
+      });
+    }
+
     byReviewId.set(comment.pull_request_review_id, group);
   }
 
-  for (const [reviewId, comments] of byReviewId) {
+  for (const [reviewId, commentsById] of byReviewId) {
     const review = reviewMap.get(reviewId);
     if (!review || review.state === 'PENDING') continue;
 
@@ -30,7 +49,7 @@ export function groupNewComments(
       verdict: review.state,
       reviewBody: review.body ?? null,
       reviewAuthor: review.user?.login ?? 'unknown',
-      comments,
+      comments: [...commentsById.values()],
     });
   }
 
@@ -46,7 +65,7 @@ export function extractNewCommentIds(batches: CommentBatch[]): number[] {
   const ids: number[] = [];
   for (const batch of batches) {
     if (batch.type === 'review') {
-      ids.push(...batch.comments.map((c) => c.id));
+      ids.push(...batch.comments.filter((c) => c.isNew).map((c) => c.id));
     } else {
       ids.push(batch.comment.id);
     }

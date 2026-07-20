@@ -15,6 +15,7 @@ export type PRInfo = {
 export type ReviewComment = {
   id: number;
   pull_request_review_id: number | null;
+  in_reply_to_id: number | null;
   body: string;
   path: string;
   line: number | null;
@@ -22,6 +23,10 @@ export type ReviewComment = {
   user: { login: string } | null;
   html_url: string;
   diff_hunk: string;
+};
+
+export type ThreadedReviewComment = ReviewComment & {
+  isNew: boolean;
 };
 
 export type IssueComment = {
@@ -45,7 +50,7 @@ export type ReviewBatch = {
   verdict: string;
   reviewBody: string | null;
   reviewAuthor: string;
-  comments: ReviewComment[];
+  comments: ThreadedReviewComment[];
 };
 
 export type IssueBatch = {
@@ -60,6 +65,7 @@ export type PollCycleResult = {
   newCommentCount: number;
   dispatchedAgentCount: number;
   skippedAgentResponseCount: number;
+  skippedIgnoredCommentCount: number;
 };
 
 export type InvokePi = (

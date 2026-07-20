@@ -37,6 +37,7 @@ export function createFetcher(): GitHubFetcher {
       return data.map((c) => ({
         id: c.id,
         pull_request_review_id: c.pull_request_review_id ?? null,
+        in_reply_to_id: c.in_reply_to_id ?? null,
         body: c.body,
         path: c.path,
         line: c.line ?? null,

@@ -20,9 +20,10 @@ src/
   lib/
     github.ts           — Octokit-backed GitHubFetcher + parsePRUrl
     grouping.ts         — Pure comment grouping logic (groupNewComments, extractNewCommentIds)
-    pi.ts               — invokePi: spawns `pix --session-id <session-id> <window-name> "/skill:address-pr-comments <prompt>"`
-    poll-cycle.ts       — processPollCycle: fetches, groups, invokes pi, returns updated state
-    prompt.ts           — buildPrompt: constructs the structured pi prompt for a comment batch
+    ignored-agents.ts   — GitHub agent logins excluded from dispatch
+    pi.ts               — invokePi: creates a pix window or posts to the existing tmux window
+    poll-cycle.ts       — processPollCycle: fetches, filters, batches, invokes pi, returns updated state
+    prompt.ts           — buildPrompt: constructs one structured pi prompt for all actionable batches
     state.ts            — loadState / saveState: JSON persistence at ~/.loops/state/
   types.ts              — All shared types (State, PRInfo, CommentBatch, GitHubFetcher, InvokePi, …)
 skills/
@@ -57,16 +58,16 @@ Schema:
 }
 ```
 
-The file is created on first run and updated after each batch is handed to pi. Restarting the process will not re-process already-seen comments.
+The file is created on first run and updated after each poll cycle. Restarting the process will not re-process already-seen or ignored comments.
 
 ## pi invocation
 
-Each comment batch becomes one pix invocation:
+All actionable feedback found in a poll cycle is combined into one structured prompt. The first dispatch creates the deterministic pix window and session:
 ```
 pix --session-id loops-pr-{owner}-{repo}-{number} loops-pr-{owner}-{repo}-{number} "/skill:address-pr-comments <structured prompt>"
 ```
 
-The session ID is deterministic per PR, so each dispatched pi agent continues the same session. The window name is also deterministic per PR. If a window already exists, pix creates a suffixed window.
+Later dispatches use `tmux send-keys` to post to that existing window, so one PR continuously uses one tmux window and pi session. Agent-authored feedback from logins in `src/lib/ignored-agents.ts` is marked seen without being dispatched.
 
 The `address-pr-comments` skill should be installed as a pi skill from `skills/address-pr-comments/SKILL.md`.
 

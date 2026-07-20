@@ -32,8 +32,11 @@ export async function prWatch(prUrl: string): Promise<void> {
           `Detected ${result.skippedAgentResponseCount} agent response comment(s); not dispatching another agent`,
         );
       }
+      if (result.skippedIgnoredCommentCount > 0) {
+        console.log(`Ignored ${result.skippedIgnoredCommentCount} comment(s) from configured agents`);
+      }
       if (result.dispatchedAgentCount > 0) {
-        console.log(`Successfully sent ${result.dispatchedAgentCount} agent(s) out`);
+        console.log('Sent new feedback to the agent session');
       }
       if (result.state !== state) {
         await saveState(statePath, result.state);

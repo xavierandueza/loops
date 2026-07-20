@@ -9,6 +9,7 @@ const makeReviewComment = (
 ): ReviewComment => ({
   id,
   pull_request_review_id: reviewId,
+  in_reply_to_id: null,
   body: `comment ${id}`,
   path: 'src/foo.ts',
   line: 10,
@@ -112,6 +113,25 @@ describe('groupNewComments', () => {
       const batches = groupNewComments(reviewComments, [], reviews, state);
 
       expect(batches).toHaveLength(0);
+    });
+
+    it('includes old comments from the same inline thread when a new reply appears', () => {
+      const reviewComments = [
+        makeReviewComment(1, 42, { body: 'original thread comment' }),
+        makeReviewComment(2, 42, { body: 'new reply', in_reply_to_id: 1 }),
+      ];
+      const reviews = [makeReview(42, 'COMMENTED')];
+      const state: State = { seenCommentIds: [1], seenReviewIds: [] };
+
+      const batches = groupNewComments(reviewComments, [], reviews, state);
+
+      expect(batches).toHaveLength(1);
+      if (batches[0].type === 'review') {
+        expect(batches[0].comments).toMatchObject([
+          { id: 1, body: 'original thread comment', isNew: false },
+          { id: 2, body: 'new reply', isNew: true },
+        ]);
+      }
     });
   });
 

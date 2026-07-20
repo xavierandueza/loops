@@ -1,5 +1,6 @@
 import { groupNewComments, extractNewCommentIds } from './grouping.js';
 import { buildPrompt } from './prompt.js';
+import { IGNORED_AGENT_LOGINS } from './ignored-agents.js';
 import type {
   CommentBatch,
   GitHubFetcher,
@@ -31,7 +32,7 @@ function batchHasAgentResponse(batch: CommentBatch): boolean {
   if (batch.type === 'review') {
     return (
       hasAgentResponseMarker(batch.reviewBody) ||
-      batch.comments.some((comment) => hasAgentResponseMarker(comment.body))
+      batch.comments.some((comment) => comment.isNew && hasAgentResponseMarker(comment.body))
     );
   }
 
@@ -56,17 +57,65 @@ export async function processPollCycle(
   const newIds = extractNewCommentIds(batches);
 
   if (batches.length === 0) {
-    return { state, newCommentCount: 0, dispatchedAgentCount: 0, skippedAgentResponseCount: 0 };
+    return {
+      state,
+      newCommentCount: 0,
+      dispatchedAgentCount: 0,
+      skippedAgentResponseCount: 0,
+      skippedIgnoredCommentCount: 0,
+    };
   }
 
   const agentResponseBatches: CommentBatch[] = [];
+  const ignoredBatches: CommentBatch[] = [];
   const actionableBatches: CommentBatch[] = [];
 
   for (const batch of batches) {
-    if (batchHasAgentResponse(batch)) {
-      agentResponseBatches.push(batch);
+    if (batch.type === 'issue') {
+      const author = batch.comment.user?.login;
+      if (author && IGNORED_AGENT_LOGINS.has(author.toLowerCase())) {
+        ignoredBatches.push(batch);
+        continue;
+      }
+      if (batchHasAgentResponse(batch)) {
+        agentResponseBatches.push(batch);
+      } else {
+        actionableBatches.push(batch);
+      }
+      continue;
+    }
+
+    const ignoredNewCommentIds = new Set(
+      batch.comments
+        .filter((comment) => {
+          const author = comment.user?.login ?? batch.reviewAuthor;
+          return comment.isNew && IGNORED_AGENT_LOGINS.has(author.toLowerCase());
+        })
+        .map((comment) => comment.id),
+    );
+
+    if (ignoredNewCommentIds.size > 0) {
+      ignoredBatches.push({
+        ...batch,
+        comments: batch.comments.filter(
+          (comment) => comment.isNew && ignoredNewCommentIds.has(comment.id),
+        ),
+      });
+    }
+
+    const actionableBatch: CommentBatch = {
+      ...batch,
+      comments: batch.comments.filter(
+        (comment) => !comment.isNew || !ignoredNewCommentIds.has(comment.id),
+      ),
+    };
+    if (!actionableBatch.comments.some((comment) => comment.isNew)) {
+      continue;
+    }
+    if (batchHasAgentResponse(actionableBatch)) {
+      agentResponseBatches.push(actionableBatch);
     } else {
-      actionableBatches.push(batch);
+      actionableBatches.push(actionableBatch);
     }
   }
 
@@ -74,8 +123,8 @@ export async function processPollCycle(
   const session = sessionId(pr);
   const skill = skillName();
 
-  for (const batch of actionableBatches) {
-    const prompt = buildPrompt(pr, batch);
+  if (actionableBatches.length > 0) {
+    const prompt = buildPrompt(pr, actionableBatches);
     await invokePi(window, session, skill, prompt, cwd);
   }
 
@@ -85,7 +134,8 @@ export async function processPollCycle(
       seenReviewIds: state.seenReviewIds,
     },
     newCommentCount: newIds.length,
-    dispatchedAgentCount: actionableBatches.length,
+    dispatchedAgentCount: actionableBatches.length > 0 ? 1 : 0,
     skippedAgentResponseCount: extractNewCommentIds(agentResponseBatches).length,
+    skippedIgnoredCommentCount: extractNewCommentIds(ignoredBatches).length,
   };
 }
