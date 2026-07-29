@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { groupNewComments, extractNewCommentIds } from './grouping.js';
 import { buildPrompt } from './prompt.js';
 import { IGNORED_AGENT_LOGINS } from './ignored-agents.js';
@@ -10,8 +11,13 @@ import type {
   PollCycleResult,
 } from '../types.js';
 
-export function windowName(pr: PRInfo): string {
-  return `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
+export function agentName(pr: PRInfo): string {
+  const repositoryHash = createHash('sha256')
+    .update(`${pr.owner}/${pr.repo}`)
+    .digest('hex')
+    .slice(0, 8);
+  const prNumber = String(pr.number).slice(-14);
+  return `loops-pr-${prNumber}-${repositoryHash}`;
 }
 
 export function sessionId(pr: PRInfo): string {
@@ -119,13 +125,13 @@ export async function processPollCycle(
     }
   }
 
-  const window = windowName(pr);
+  const agent = agentName(pr);
   const session = sessionId(pr);
   const skill = skillName();
 
   if (actionableBatches.length > 0) {
     const prompt = buildPrompt(pr, actionableBatches);
-    await invokePi(window, session, skill, prompt, cwd);
+    await invokePi(agent, session, skill, prompt, cwd);
   }
 
   return {

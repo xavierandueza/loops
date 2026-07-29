@@ -12,6 +12,10 @@ function stateFilePath(owner: string, repo: string, number: number): string {
 }
 
 export async function prWatch(prUrl: string): Promise<void> {
+  if (!process.env.HERDR_WORKSPACE_ID) {
+    throw new Error('pr-watch must be run inside a Herdr workspace');
+  }
+
   const { owner, repo, number } = parsePRUrl(prUrl);
   const fetcher = createFetcher();
   const statePath = stateFilePath(owner, repo, number);

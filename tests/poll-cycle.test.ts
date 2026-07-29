@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { processPollCycle } from '../src/lib/poll-cycle.js';
+import { agentName, processPollCycle } from '../src/lib/poll-cycle.js';
 import type { GitHubFetcher, PRInfo, InvokePi, State, ReviewComment } from '../src/types.js';
 
 const pr: PRInfo = {
@@ -89,17 +89,17 @@ describe('processPollCycle', () => {
     expect(invokePi).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the deterministic window name, session ID, and address-pr-comments skill for every invocation', async () => {
+  it('uses the deterministic Herdr agent name, session ID, and address-pr-comments skill', async () => {
     const fetcher = makeFetcher({
       listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(10)]),
     });
-    const expectedWindowName = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
+    const expectedAgentName = 'loops-pr-42-bcf2abe9';
     const expectedSessionId = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
 
     await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
 
     expect(invokePi).toHaveBeenCalledWith(
-      expectedWindowName,
+      expectedAgentName,
       expectedSessionId,
       'address-pr-comments',
       expect.any(String),
@@ -107,11 +107,11 @@ describe('processPollCycle', () => {
     );
   });
 
-  it('uses the same window name and session ID on a second invocation', async () => {
+  it('uses the same agent name and session ID on a second invocation', async () => {
     const fetcher = makeFetcher({
       listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(10)]),
     });
-    const expectedWindowName = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
+    const expectedAgentName = 'loops-pr-42-bcf2abe9';
     const expectedSessionId = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
     const state: State = { seenCommentIds: [], seenReviewIds: [] };
 
@@ -126,10 +126,21 @@ describe('processPollCycle', () => {
 
     expect(invokePi).toHaveBeenCalledTimes(2);
     const [firstCall, secondCall] = (invokePi as ReturnType<typeof vi.fn>).mock.calls;
-    expect(firstCall[0]).toBe(expectedWindowName);
+    expect(firstCall[0]).toBe(expectedAgentName);
     expect(firstCall[1]).toBe(expectedSessionId);
-    expect(secondCall[0]).toBe(expectedWindowName);
+    expect(secondCall[0]).toBe(expectedAgentName);
     expect(secondCall[1]).toBe(expectedSessionId);
+  });
+
+  it('keeps Herdr agent names within the 32-character limit', () => {
+    expect(
+      agentName({
+        ...pr,
+        owner: 'an-extremely-long-organisation-name',
+        repo: 'an-even-longer-repository-name-than-usual',
+        number: Number.MAX_SAFE_INTEGER,
+      }),
+    ).toMatch(/^[a-z][a-z0-9_-]{0,31}$/);
   });
 
   it('returns updated state with newly seen comment IDs', async () => {

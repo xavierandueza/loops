@@ -69,7 +69,7 @@ export type PollCycleResult = {
 };
 
 export type InvokePi = (
-  windowName: string,
+  agentName: string,
   sessionId: string,
   skillName: string,
   prompt: string,
