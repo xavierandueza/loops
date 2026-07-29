@@ -21,7 +21,7 @@ src/
     github.ts           — Octokit-backed GitHubFetcher + parsePRUrl
     grouping.ts         — Pure comment grouping logic (groupNewComments, extractNewCommentIds)
     ignored-agents.ts   — GitHub agent logins excluded from dispatch
-    pi.ts               — invokePi: creates a pix window or posts to the existing tmux window
+    pi.ts               — invokePi: creates or prompts a named Pi agent through Herdr
     poll-cycle.ts       — processPollCycle: fetches, filters, batches, invokes pi, returns updated state
     prompt.ts           — buildPrompt: constructs one structured pi prompt for all actionable batches
     state.ts            — loadState / saveState: JSON persistence at ~/.loops/state/
@@ -60,16 +60,24 @@ Schema:
 
 The file is created on first run and updated after each poll cycle. Restarting the process will not re-process already-seen or ignored comments.
 
-## pi invocation
+## Pi invocation
 
-All actionable feedback found in a poll cycle is combined into one structured prompt. The first dispatch creates the deterministic pix window and session:
+`pr-watch` must run inside a Herdr workspace. All actionable feedback found in a poll cycle is combined into one structured prompt.
+
+The first dispatch creates an unfocused Herdr tab and starts a named Pi agent with a deterministic session ID:
 ```
-pix --session-id loops-pr-{owner}-{repo}-{number} loops-pr-{owner}-{repo}-{number} "/skill:address-pr-comments <structured prompt>"
+herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$PWD" --label loops-pr-{owner}-{repo}-{number} --no-focus
+herdr agent start <agent-name> --kind pi --pane <pane-id> -- --session-id loops-pr-{owner}-{repo}-{number}
 ```
 
-Later dispatches use `tmux send-keys` to post to that existing window, so one PR continuously uses one tmux window and pi session. Agent-authored feedback from logins in `src/lib/ignored-agents.ts` is marked seen without being dispatched.
+Later dispatches target the same live agent by its deterministic Herdr name:
+```
+herdr agent prompt <agent-name> "/skill:address-pr-comments <structured prompt>"
+```
 
-The `address-pr-comments` skill should be installed as a pi skill from `skills/address-pr-comments/SKILL.md`.
+The readable Pi session ID remains `loops-pr-{owner}-{repo}-{number}`. The Herdr agent name includes the PR number and a short repository hash so it stays within Herdr's 32-character limit. If the live agent has exited, the same Pi session ID is used when recreating it.
+
+Agent-authored feedback from logins in `src/lib/ignored-agents.ts` is marked seen without being dispatched. The `address-pr-comments` skill should be installed as a Pi skill from `skills/address-pr-comments/SKILL.md`.
 
 ## Adding a new subcommand
 
