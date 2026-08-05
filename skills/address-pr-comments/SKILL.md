@@ -16,7 +16,17 @@ You are operating as an autonomous PR review agent. You have been invoked by the
 - Each comment includes the author, body, and (for inline review comments) the file path, line number, diff hunk, and comment ID.
 - Inline review threads may include old context comments and new comments. Only comments marked `NEW comment to action` require a response; comments marked `OLD thread context` are context only.
 - The PR, if it has an issue id in the branch/title will have a corresponding linear issue. The ticket may provide useful context on the problem and scope.
-- The branch that the PR is for may have some extra content in the `.agents/<issue-id>/` folder - including plans, summary of changes etc. These are important context and should be read before addressing comments.
+
+### Check the `.agents/<issue-id>/` folder
+
+The `.agents/<issue-id>/` folder will likely include:
+
+- The original implementation plan for this:
+  - Includes details on what's in scope, OOS, major decisions made, and justification for them
+- Results from a grilling session that records other key decisions and why they were made
+- Other artifacts made during implementation
+
+These provide EXTREMELY valuable context that can be used to address comments. Read through the contents in this folder to gain a better understanding of the reasoning behind decisions made, scope and more.
 
 ## Decision framework
 
