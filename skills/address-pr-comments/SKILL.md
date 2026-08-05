@@ -75,3 +75,15 @@ Example reply when disagreeing:
 - Always reply to every new comment you were given, even if you disagree or do no work.
 - One reply per review (not per inline comment) is fine if they're all addressed in the same commit.
 - Keep replies direct and short — the author can see the diff.
+
+## Special Cases - Custom AI Reviewers
+
+There are 2x special cases for the commenters who left reviews:
+
+- `ai-deploy-readme` - this is JUST for the `ai` repository
+- `github-actions` - this is JUST for the `readme` repository
+
+These are automated reviews triggered by the `anand-review` label. If you are addressing comments from those agents in those repositories:
+
+- Please also resolve the comments
+- After all comments are addressed, add the `anand-review` label again. That will kickstart another review.
