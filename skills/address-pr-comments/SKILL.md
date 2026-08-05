@@ -49,8 +49,8 @@ This makes it MUCH easier to verify that issues have been resolved.
 
 ## Responding to comments
 
-All new comments must be responded to. For inline comments, add a response in the thread.
-Use the GH CLI to do this.
+All new comments that are about code quality must be responded to. For things that are about deployments, actions triggered, etc. those can be ignored.
+For inline comments, add a response in the thread. Use the GH CLI to do this.
 
 ## Reply format
 
