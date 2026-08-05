@@ -38,6 +38,15 @@ Here are some best practice things to consider:
 
 Consider these, amongst other things that a senior staff engineer considers when addressing PR comments.
 
+## Atomic Commits
+Should changes be required your commits, as much as possible, should resolve individual issues identified in the PR.
+
+For example:
+- Comments A, B, C all on the same issue, address in a single commit
+- Comment D is about a separate issue, address in another, different commit
+
+This makes it MUCH easier to verify that issues have been resolved.
+
 ## Responding to comments
 
 All new comments must be responded to. For inline comments, add a response in the thread.
