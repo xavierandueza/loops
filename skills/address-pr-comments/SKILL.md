@@ -85,6 +85,7 @@ Example reply when disagreeing:
 - Always reply to every new comment you were given, even if you disagree or do no work.
 - One reply per review (not per inline comment) is fine if they're all addressed in the same commit.
 - Keep replies direct and short — the author can see the diff.
+- Do NOT try and wait for another round of comments manually yourself - a user will update you if another batch of comments has been added.
 
 ## Special Cases - Custom AI Reviewers
 
