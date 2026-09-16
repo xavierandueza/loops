@@ -1,6 +1,21 @@
 import { Octokit } from '@octokit/rest';
 import { execSync } from 'child_process';
-import type { GitHubFetcher, PRInfo, ReviewComment, IssueComment, Review } from '../types.js';
+import type {
+  CIFailure,
+  GitHubFetcher,
+  PRInfo,
+  ReviewComment,
+  IssueComment,
+  Review,
+} from '../types.js';
+
+const FAILED_CHECK_CONCLUSIONS = new Set([
+  'action_required',
+  'failure',
+  'stale',
+  'startup_failure',
+  'timed_out',
+]);
 
 function getToken(): string {
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
@@ -24,6 +39,7 @@ export function createFetcher(): GitHubFetcher {
         title: data.title,
         description: data.body ?? '',
         url: data.html_url,
+        headSha: data.head.sha,
       };
     },
 
@@ -77,6 +93,44 @@ export function createFetcher(): GitHubFetcher {
         user: r.user ? { login: r.user.login } : null,
         submitted_at: r.submitted_at ?? null,
       }));
+    },
+
+    async listCIFailures(owner, repo, ref): Promise<CIFailure[]> {
+      const [checkRunsResponse, statusesResponse] = await Promise.all([
+        octokit.checks.listForRef({ owner, repo, ref, filter: 'latest', per_page: 100 }),
+        octokit.repos.getCombinedStatusForRef({ owner, repo, ref, per_page: 100 }),
+      ]);
+
+      const failedChecks = checkRunsResponse.data.check_runs
+        .filter(
+          (checkRun) =>
+            checkRun.status === 'completed' &&
+            checkRun.conclusion !== null &&
+            FAILED_CHECK_CONCLUSIONS.has(checkRun.conclusion),
+        )
+        .map((checkRun) => ({
+          id: `check:${checkRun.id}`,
+          name: checkRun.name,
+          conclusion: checkRun.conclusion ?? 'failure',
+          detailsUrl: checkRun.details_url ?? checkRun.html_url ?? null,
+          title: checkRun.output.title ?? null,
+          summary: checkRun.output.summary ?? null,
+          text: checkRun.output.text ?? null,
+        }));
+
+      const failedStatuses = statusesResponse.data.statuses
+        .filter((status) => status.state === 'failure' || status.state === 'error')
+        .map((status) => ({
+          id: `status:${status.id}`,
+          name: status.context,
+          conclusion: status.state,
+          detailsUrl: status.target_url ?? null,
+          title: null,
+          summary: status.description ?? null,
+          text: null,
+        }));
+
+      return [...failedChecks, ...failedStatuses];
     },
   };
 }

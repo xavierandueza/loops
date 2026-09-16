@@ -1,8 +1,12 @@
-import type { PRInfo, CommentBatch, ReviewComment, IssueComment } from '../types.js';
+import type { PRInfo, CommentBatch, ReviewComment, IssueComment, CIFailure } from '../types.js';
 
-export function buildPrompt(pr: PRInfo, batches: CommentBatch[]): string {
+export function buildPrompt(
+  pr: PRInfo,
+  batches: CommentBatch[],
+  ciFailures: CIFailure[] = [],
+): string {
   const lines: string[] = [
-    `# PR Review Action`,
+    `# PR Action Required`,
     ``,
     `## PR Context`,
     `**Title:** ${pr.title}`,
@@ -30,6 +34,19 @@ export function buildPrompt(pr: PRInfo, batches: CommentBatch[]): string {
     } else {
       lines.push(`## Comment to Action`, ...formatIssueComment(batch.comment));
     }
+  }
+
+  for (const failure of ciFailures) {
+    lines.push(
+      ``,
+      `## Failing CI to Action`,
+      `**Check:** ${failure.name}`,
+      `**Conclusion:** ${failure.conclusion}`,
+    );
+    if (failure.detailsUrl) lines.push(`**Details:** ${failure.detailsUrl}`);
+    if (failure.title) lines.push(`**Title:** ${failure.title}`);
+    if (failure.summary) lines.push(`**Summary:** ${failure.summary}`);
+    if (failure.text) lines.push(`**Output:**`, failure.text);
   }
 
   return lines.join('\n');

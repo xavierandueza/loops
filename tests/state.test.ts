@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { loadState, saveState } from '../src/lib/state.js';
@@ -17,30 +17,59 @@ describe('state persistence', () => {
 
   it('returns empty state when file does not exist', async () => {
     const state = await loadState(join(tmpDir, 'nonexistent.json'));
-    expect(state).toEqual({ seenCommentIds: [], seenReviewIds: [] });
+    expect(state).toEqual({
+      seenCommentIds: [],
+      seenReviewIds: [],
+      seenCIFailureIds: [],
+    });
   });
 
   it('persists and reloads state correctly', async () => {
     const path = join(tmpDir, 'state.json');
-    await saveState(path, { seenCommentIds: [1, 2, 3], seenReviewIds: [99] });
+    await saveState(path, {
+      seenCommentIds: [1, 2, 3],
+      seenReviewIds: [99],
+      seenCIFailureIds: ['check:123'],
+    });
     const loaded = await loadState(path);
-    expect(loaded).toEqual({ seenCommentIds: [1, 2, 3], seenReviewIds: [99] });
+    expect(loaded).toEqual({
+      seenCommentIds: [1, 2, 3],
+      seenReviewIds: [99],
+      seenCIFailureIds: ['check:123'],
+    });
   });
 
-  it('does not re-process seen comments after process restart', async () => {
+  it('loads state files created before CI failure tracking was added', async () => {
     const path = join(tmpDir, 'state.json');
-    await saveState(path, { seenCommentIds: [123, 456], seenReviewIds: [789] });
+    writeFileSync(path, JSON.stringify({ seenCommentIds: [1], seenReviewIds: [2] }));
 
-    // Simulate a restart by reloading from disk
+    const loaded = await loadState(path);
+
+    expect(loaded.seenCIFailureIds).toEqual([]);
+  });
+
+  it('persists seen comments and CI failures across process restarts', async () => {
+    const path = join(tmpDir, 'state.json');
+    await saveState(path, {
+      seenCommentIds: [123, 456],
+      seenReviewIds: [789],
+      seenCIFailureIds: ['status:100'],
+    });
+
     const reloaded = await loadState(path);
     expect(reloaded.seenCommentIds).toContain(123);
     expect(reloaded.seenCommentIds).toContain(456);
     expect(reloaded.seenReviewIds).toContain(789);
+    expect(reloaded.seenCIFailureIds).toContain('status:100');
   });
 
   it('creates parent directories if they do not exist', async () => {
     const path = join(tmpDir, 'nested', 'deep', 'state.json');
-    await saveState(path, { seenCommentIds: [1], seenReviewIds: [] });
+    await saveState(path, {
+      seenCommentIds: [1],
+      seenReviewIds: [],
+      seenCIFailureIds: [],
+    });
     const loaded = await loadState(path);
     expect(loaded.seenCommentIds).toEqual([1]);
   });

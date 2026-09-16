@@ -36,7 +36,11 @@ const makeReview = (id: number, state: string): Review => ({
   submitted_at: '2024-01-01T00:00:00Z',
 });
 
-const emptyState: State = { seenCommentIds: [], seenReviewIds: [] };
+const emptyState: State = {
+  seenCommentIds: [],
+  seenReviewIds: [],
+  seenCIFailureIds: [],
+};
 
 describe('groupNewComments', () => {
   describe('review comment grouping', () => {
@@ -94,7 +98,7 @@ describe('groupNewComments', () => {
         makeReviewComment(2, 42),
       ];
       const reviews = [makeReview(42, 'CHANGES_REQUESTED')];
-      const state: State = { seenCommentIds: [1], seenReviewIds: [] };
+      const state: State = { ...emptyState, seenCommentIds: [1] };
 
       const batches = groupNewComments(reviewComments, [], reviews, state);
 
@@ -108,7 +112,7 @@ describe('groupNewComments', () => {
     it('skips an entire review group if all its comments are already seen', () => {
       const reviewComments = [makeReviewComment(1, 42)];
       const reviews = [makeReview(42, 'COMMENTED')];
-      const state: State = { seenCommentIds: [1], seenReviewIds: [] };
+      const state: State = { ...emptyState, seenCommentIds: [1] };
 
       const batches = groupNewComments(reviewComments, [], reviews, state);
 
@@ -121,7 +125,7 @@ describe('groupNewComments', () => {
         makeReviewComment(2, 42, { body: 'new reply', in_reply_to_id: 1 }),
       ];
       const reviews = [makeReview(42, 'COMMENTED')];
-      const state: State = { seenCommentIds: [1], seenReviewIds: [] };
+      const state: State = { ...emptyState, seenCommentIds: [1] };
 
       const batches = groupNewComments(reviewComments, [], reviews, state);
 
@@ -148,7 +152,7 @@ describe('groupNewComments', () => {
 
     it('filters out already-seen issue comments', () => {
       const issueComments = [makeIssueComment(10), makeIssueComment(11)];
-      const state: State = { seenCommentIds: [10], seenReviewIds: [] };
+      const state: State = { ...emptyState, seenCommentIds: [10] };
 
       const batches = groupNewComments([], issueComments, [], state);
 
@@ -160,7 +164,7 @@ describe('groupNewComments', () => {
 
     it('returns empty when all issue comments are already seen', () => {
       const issueComments = [makeIssueComment(10)];
-      const state: State = { seenCommentIds: [10], seenReviewIds: [] };
+      const state: State = { ...emptyState, seenCommentIds: [10] };
 
       const batches = groupNewComments([], issueComments, [], state);
 

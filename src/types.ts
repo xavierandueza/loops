@@ -1,6 +1,7 @@
 export type State = {
   seenCommentIds: number[];
   seenReviewIds: number[];
+  seenCIFailureIds: string[];
 };
 
 export type PRInfo = {
@@ -10,6 +11,7 @@ export type PRInfo = {
   title: string;
   description: string;
   url: string;
+  headSha: string;
 };
 
 export type ReviewComment = {
@@ -60,9 +62,20 @@ export type IssueBatch = {
 
 export type CommentBatch = ReviewBatch | IssueBatch;
 
+export type CIFailure = {
+  id: string;
+  name: string;
+  conclusion: string;
+  detailsUrl: string | null;
+  title: string | null;
+  summary: string | null;
+  text: string | null;
+};
+
 export type PollCycleResult = {
   state: State;
   newCommentCount: number;
+  newCIFailureCount: number;
   dispatchedAgentCount: number;
   skippedAgentResponseCount: number;
   skippedIgnoredCommentCount: number;
@@ -81,4 +94,5 @@ export type GitHubFetcher = {
   listReviewComments: (owner: string, repo: string, pull_number: number) => Promise<ReviewComment[]>;
   listIssueComments: (owner: string, repo: string, issue_number: number) => Promise<IssueComment[]>;
   listReviews: (owner: string, repo: string, pull_number: number) => Promise<Review[]>;
+  listCIFailures: (owner: string, repo: string, ref: string) => Promise<CIFailure[]>;
 };

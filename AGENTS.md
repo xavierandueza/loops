@@ -18,12 +18,12 @@ src/
   commands/
     pr-watch.ts         — `loops pr-watch <pr-url>` implementation
   lib/
-    github.ts           — Octokit-backed GitHubFetcher + parsePRUrl
+    github.ts           — Octokit-backed PR feedback and CI fetcher + parsePRUrl
     grouping.ts         — Pure comment grouping logic (groupNewComments, extractNewCommentIds)
     ignored-agents.ts   — GitHub agent logins excluded from dispatch
     pi.ts               — invokePi: creates or prompts a named Pi agent through Herdr
-    poll-cycle.ts       — processPollCycle: fetches, filters, batches, invokes pi, returns updated state
-    prompt.ts           — buildPrompt: constructs one structured pi prompt for all actionable batches
+    poll-cycle.ts       — processPollCycle: fetches, filters, batches comments and CI failures, invokes pi, returns updated state
+    prompt.ts           — buildPrompt: constructs one structured pi prompt for all actionable comments and CI failures
     state.ts            — loadState / saveState: JSON persistence at ~/.loops/state/
   types.ts              — All shared types (State, PRInfo, CommentBatch, GitHubFetcher, InvokePi, …)
 skills/
@@ -54,15 +54,16 @@ Schema:
 ```json
 {
   "seenCommentIds": [123, 456],
-  "seenReviewIds": [789]
+  "seenReviewIds": [789],
+  "seenCIFailureIds": ["check:123", "status:456"]
 }
 ```
 
-The file is created on first run and updated after each poll cycle. Restarting the process will not re-process already-seen or ignored comments.
+The file is created on first run and updated after each poll cycle. Restarting the process will not re-process already-seen comments or CI failures. Feedback from ignored agent accounts is marked seen without dispatch.
 
 ## Pi invocation
 
-`pr-watch` must run inside a Herdr workspace. All actionable feedback found in a poll cycle is combined into one structured prompt.
+`pr-watch` must run inside a Herdr workspace. All actionable review feedback and newly failing CI found in a poll cycle are combined into one structured prompt. CI includes both GitHub check runs and legacy commit statuses for the PR's current head commit.
 
 The first dispatch creates an unfocused Herdr tab and starts a named Pi agent with a deterministic session ID:
 ```

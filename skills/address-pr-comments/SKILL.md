@@ -1,16 +1,17 @@
 ---
 name: address-pr-comments
-description: Address PR comments left on a PR.
+description: Address new PR review comments and failing CI checks dispatched by loops pr-watch.
 disable-model-invocation: false
 ---
 
-# Address PR Comments
+# Address PR Feedback and CI
 
-You are operating as an autonomous PR review agent. You have been invoked by the `loops pr-watch` CLI because one or more new comments have appeared on a GitHub pull request. Your job is to address PR comment(s). 
+You are operating as an autonomous PR action agent. The `loops pr-watch` CLI invoked you because new review feedback, failing CI, or both appeared on a pull request. Address every item in the prompt.
 
 ## Your context
 
-- The prompt you received contains: PR title, description, URL, and the comment(s) to action.
+- The prompt contains the PR title, description, URL, and the comments and/or CI failures to action.
+- A CI failure includes its check name, conclusion, details URL, and any output GitHub exposed.
 - This may NOT be for the working directory/repository that you have been launched from - this should be passed in to you if its not, but if it doesn't seem to be the case determine where the user is coming from:
   - previous pi sessions in the current working directory may give an indication on this in case its not clear
 - Each comment includes the author, body, and (for inline review comments) the file path, line number, diff hunk, and comment ID.
@@ -56,6 +57,10 @@ For example:
 - Comment D is about a separate issue, address in another, different commit
 
 This makes it MUCH easier to verify that issues have been resolved.
+
+## Addressing CI failures
+
+Use the failure output and details URL to identify the failing command. Reproduce it locally when possible, fix the root cause, and run the relevant checks before committing. Treat infrastructure-only failures as non-code issues: record why no code change is appropriate rather than making speculative changes.
 
 ## Responding to comments
 

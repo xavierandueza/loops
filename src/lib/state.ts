@@ -2,12 +2,21 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { dirname } from 'path';
 import type { State } from '../types.js';
 
-const EMPTY_STATE: State = { seenCommentIds: [], seenReviewIds: [] };
+const EMPTY_STATE: State = {
+  seenCommentIds: [],
+  seenReviewIds: [],
+  seenCIFailureIds: [],
+};
 
 export async function loadState(path: string): Promise<State> {
   try {
     const raw = await readFile(path, 'utf8');
-    return JSON.parse(raw) as State;
+    const state = JSON.parse(raw) as State;
+    return {
+      seenCommentIds: state.seenCommentIds ?? [],
+      seenReviewIds: state.seenReviewIds ?? [],
+      seenCIFailureIds: state.seenCIFailureIds ?? [],
+    };
   } catch {
     return { ...EMPTY_STATE };
   }

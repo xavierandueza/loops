@@ -9,9 +9,14 @@ const pr: PRInfo = {
   title: 'Add feature X',
   description: 'This PR adds feature X',
   url: 'https://github.com/acme/myapp/pull/42',
+  headSha: 'abc123',
 };
 
-const emptyState: State = { seenCommentIds: [], seenReviewIds: [] };
+const emptyState: State = {
+  seenCommentIds: [],
+  seenReviewIds: [],
+  seenCIFailureIds: [],
+};
 
 const makeReviewComment = (id: number, reviewId: number): ReviewComment => ({
   id,
@@ -47,6 +52,7 @@ function makeFetcher(overrides: Partial<GitHubFetcher> = {}): GitHubFetcher {
     listReviewComments: vi.fn().mockResolvedValue([]),
     listIssueComments: vi.fn().mockResolvedValue([]),
     listReviews: vi.fn().mockResolvedValue([]),
+    listCIFailures: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
@@ -113,13 +119,13 @@ describe('processPollCycle', () => {
     });
     const expectedAgentName = 'loops-pr-42-bcf2abe9';
     const expectedSessionId = `loops-pr-${pr.owner}-${pr.repo}-${pr.number}`;
-    const state: State = { seenCommentIds: [], seenReviewIds: [] };
+    const state: State = { ...emptyState };
 
     await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
     await processPollCycle(
       makeFetcher({ listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(11)]) }),
       pr,
-      { seenCommentIds: [10], seenReviewIds: [] },
+      { ...emptyState, seenCommentIds: [10] },
       invokePi,
       '/cwd',
     );
@@ -171,7 +177,7 @@ describe('processPollCycle', () => {
   });
 
   it('does not re-process comments seen in a previous cycle', async () => {
-    const state: State = { seenCommentIds: [10], seenReviewIds: [] };
+    const state: State = { ...emptyState, seenCommentIds: [10] };
     const fetcher = makeFetcher({
       listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(10)]),
     });
@@ -246,7 +252,7 @@ describe('processPollCycle', () => {
       listReviewComments: vi.fn().mockResolvedValue([originalComment, humanReply]),
       listReviews: vi.fn().mockResolvedValue([review]),
     });
-    const state: State = { seenCommentIds: [10], seenReviewIds: [] };
+    const state: State = { ...emptyState, seenCommentIds: [10] };
 
     await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
 
@@ -292,7 +298,7 @@ describe('processPollCycle', () => {
       listReviewComments: vi.fn().mockResolvedValue([originalComment, newReply]),
       listReviews: vi.fn().mockResolvedValue([makeReview(99)]),
     });
-    const state: State = { seenCommentIds: [10], seenReviewIds: [] };
+    const state: State = { ...emptyState, seenCommentIds: [10] };
 
     await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
 
@@ -313,11 +319,95 @@ describe('processPollCycle', () => {
       listReviewComments: vi.fn().mockResolvedValue([originalComment, newReply]),
       listReviews: vi.fn().mockResolvedValue([makeReview(99)]),
     });
-    const state: State = { seenCommentIds: [10], seenReviewIds: [] };
+    const state: State = { ...emptyState, seenCommentIds: [10] };
 
     await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
 
     expect(invokePi).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispatches a failing CI check for the PR current head commit', async () => {
+    const fetcher = makeFetcher({
+      getPR: vi.fn().mockResolvedValue({ ...pr, headSha: 'current123' }),
+      listCIFailures: vi.fn().mockResolvedValue([
+        {
+          id: 'check:123',
+          name: 'test',
+          conclusion: 'failure',
+          detailsUrl: 'https://github.com/acme/myapp/actions/runs/123',
+          title: 'Tests failed',
+          summary: '2 tests failed',
+          text: 'Expected 200, received 500',
+        },
+      ]),
+    });
+
+    const result = await processPollCycle(
+      fetcher,
+      { ...pr, headSha: 'stale123' },
+      emptyState,
+      invokePi,
+      '/cwd',
+    );
+
+    expect(fetcher.listCIFailures).toHaveBeenCalledWith('acme', 'myapp', 'current123');
+    expect(invokePi).toHaveBeenCalledTimes(1);
+    const prompt = (invokePi as ReturnType<typeof vi.fn>).mock.calls[0][3] as string;
+    expect(prompt).toContain('## Failing CI to Action');
+    expect(prompt).toContain('**Check:** test');
+    expect(prompt).toContain('**Summary:** 2 tests failed');
+    expect(prompt).toContain('Expected 200, received 500');
+    expect(result.newCIFailureCount).toBe(1);
+    expect(result.state.seenCIFailureIds).toEqual(['check:123']);
+  });
+
+  it('batches failing CI and new comments into one pi message', async () => {
+    const fetcher = makeFetcher({
+      listIssueComments: vi.fn().mockResolvedValue([makeIssueComment(10)]),
+      listCIFailures: vi.fn().mockResolvedValue([
+        {
+          id: 'status:456',
+          name: 'ci/build',
+          conclusion: 'error',
+          detailsUrl: 'https://ci.example.com/build/456',
+          title: null,
+          summary: 'Build infrastructure error',
+          text: null,
+        },
+      ]),
+    });
+
+    await processPollCycle(fetcher, pr, emptyState, invokePi, '/cwd');
+
+    expect(invokePi).toHaveBeenCalledTimes(1);
+    const prompt = (invokePi as ReturnType<typeof vi.fn>).mock.calls[0][3] as string;
+    expect(prompt).toContain('**Comment ID:** 10');
+    expect(prompt).toContain('**Check:** ci/build');
+  });
+
+  it('does not re-dispatch a previously seen CI failure', async () => {
+    const fetcher = makeFetcher({
+      listCIFailures: vi.fn().mockResolvedValue([
+        {
+          id: 'check:123',
+          name: 'test',
+          conclusion: 'failure',
+          detailsUrl: null,
+          title: null,
+          summary: null,
+          text: null,
+        },
+      ]),
+    });
+    const state = {
+      ...emptyState,
+      seenCIFailureIds: ['check:123'],
+    };
+
+    const result = await processPollCycle(fetcher, pr, state, invokePi, '/cwd');
+
+    expect(invokePi).not.toHaveBeenCalled();
+    expect(result.newCIFailureCount).toBe(0);
   });
 
   it('batches different reviews and issue comments into one pi message', async () => {

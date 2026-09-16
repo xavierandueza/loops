@@ -52,20 +52,24 @@ export async function processPollCycle(
   invokePi: InvokePi,
   cwd: string,
 ): Promise<PollCycleResult> {
-  const [reviewComments, issueComments, reviews] = await Promise.all([
-    fetcher.listReviewComments(pr.owner, pr.repo, pr.number),
-    fetcher.listIssueComments(pr.owner, pr.repo, pr.number),
-    fetcher.listReviews(pr.owner, pr.repo, pr.number),
+  const currentPR = await fetcher.getPR(pr.owner, pr.repo, pr.number);
+  const [reviewComments, issueComments, reviews, ciFailures] = await Promise.all([
+    fetcher.listReviewComments(currentPR.owner, currentPR.repo, currentPR.number),
+    fetcher.listIssueComments(currentPR.owner, currentPR.repo, currentPR.number),
+    fetcher.listReviews(currentPR.owner, currentPR.repo, currentPR.number),
+    fetcher.listCIFailures(currentPR.owner, currentPR.repo, currentPR.headSha),
   ]);
 
   const batches = groupNewComments(reviewComments, issueComments, reviews, state);
-
   const newIds = extractNewCommentIds(batches);
+  const seenCIFailureIds = new Set(state.seenCIFailureIds);
+  const newCIFailures = ciFailures.filter((failure) => !seenCIFailureIds.has(failure.id));
 
-  if (batches.length === 0) {
+  if (batches.length === 0 && newCIFailures.length === 0) {
     return {
       state,
       newCommentCount: 0,
+      newCIFailureCount: 0,
       dispatchedAgentCount: 0,
       skippedAgentResponseCount: 0,
       skippedIgnoredCommentCount: 0,
@@ -125,12 +129,12 @@ export async function processPollCycle(
     }
   }
 
-  const agent = agentName(pr);
-  const session = sessionId(pr);
+  const agent = agentName(currentPR);
+  const session = sessionId(currentPR);
   const skill = skillName();
 
-  if (actionableBatches.length > 0) {
-    const prompt = buildPrompt(pr, actionableBatches);
+  if (actionableBatches.length > 0 || newCIFailures.length > 0) {
+    const prompt = buildPrompt(currentPR, actionableBatches, newCIFailures);
     await invokePi(agent, session, skill, prompt, cwd);
   }
 
@@ -138,9 +142,11 @@ export async function processPollCycle(
     state: {
       seenCommentIds: [...state.seenCommentIds, ...newIds],
       seenReviewIds: state.seenReviewIds,
+      seenCIFailureIds: [...state.seenCIFailureIds, ...newCIFailures.map(({ id }) => id)],
     },
     newCommentCount: newIds.length,
-    dispatchedAgentCount: actionableBatches.length > 0 ? 1 : 0,
+    newCIFailureCount: newCIFailures.length,
+    dispatchedAgentCount: actionableBatches.length > 0 || newCIFailures.length > 0 ? 1 : 0,
     skippedAgentResponseCount: extractNewCommentIds(agentResponseBatches).length,
     skippedIgnoredCommentCount: extractNewCommentIds(ignoredBatches).length,
   };

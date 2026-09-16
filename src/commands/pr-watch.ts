@@ -30,7 +30,9 @@ export async function prWatch(prUrl: string): Promise<void> {
     let state = await loadState(statePath);
     try {
       const result = await processPollCycle(fetcher, prInfo, state, invokePi, cwd);
-      console.log(`Found ${result.newCommentCount} new comment(s)`);
+      console.log(
+        `Found ${result.newCommentCount} new comment(s) and ${result.newCIFailureCount} new CI failure(s)`,
+      );
       if (result.skippedAgentResponseCount > 0) {
         console.log(
           `Detected ${result.skippedAgentResponseCount} agent response comment(s); not dispatching another agent`,
