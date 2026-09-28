@@ -5,7 +5,7 @@ import { loadState, saveState } from '../lib/state.js';
 import { processPollCycle } from '../lib/poll-cycle.js';
 import { invokePi } from '../lib/pi.js';
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 120_000;
 
 function stateFilePath(owner: string, repo: string, number: number): string {
   return join(homedir(), '.loops', 'state', `pr-${owner}-${repo}-${number}.json`);
