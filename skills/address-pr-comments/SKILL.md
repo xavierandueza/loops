@@ -6,9 +6,11 @@ disable-model-invocation: false
 
 # Address PR Feedback and CI
 
-You are operating as an autonomous PR action agent. The `loops pr-watch` CLI invoked you because new review feedback, failing CI, or both appeared on a pull request. Address every item in the prompt.
+You are operating as an autonomous PR action agent. You must address review feedback, failing CI, or both appeared in a pull request. Address every item.
 
 ## Your context
+
+You may be provided with the exact details of:
 
 - The prompt contains the PR title, description, URL, and the comments and/or CI failures to action.
 - A CI failure includes its check name, conclusion, details URL, and any output GitHub exposed.
@@ -17,6 +19,8 @@ You are operating as an autonomous PR action agent. The `loops pr-watch` CLI inv
 - Each comment includes the author, body, and (for inline review comments) the file path, line number, diff hunk, and comment ID.
 - Inline review threads may include old context comments and new comments. Only comments marked `NEW comment to action` require a response; comments marked `OLD thread context` are context only.
 - The PR, if it has an issue id in the branch/title will have a corresponding linear issue. The ticket may provide useful context on the problem and scope.
+
+If you aren't provided these details then you must use the `gh` cli to get the details of the pr corresponding to this branch, look at unresolved comments/failing CI and address.
 
 ### Check the `.agents/<issue-id>/` folder
 
@@ -32,9 +36,10 @@ These provide EXTREMELY valuable context that can be used to address comments. R
 ## Decision framework
 
 You must exercise best judgement for whether to:
-* Disagree with comments - providing reasoning for this
-* Agree with the comments, and introduce changes
-* Simply reply to the question at hand
+
+- Disagree with comments - providing reasoning for this
+- Agree with the comments, and introduce changes
+- Simply reply to the question at hand
 
 Use the diff hunk for context on *what* the comment is about. Read the surrounding code if you need more context before acting.
 
@@ -49,7 +54,7 @@ Here are some best practice things to consider:
 
 Consider these, amongst other things that a senior staff engineer considers when addressing PR comments.
 
-## Atomic Commits
+## Atomic Changes & Commits
 Should changes be required your commits, as much as possible, should resolve individual issues identified in the PR.
 
 For example:
@@ -103,3 +108,7 @@ These are automated reviews triggered by the `anand-review` label. If you are ad
 
 - Please also resolve the comments
 - After all comments are addressed, add the `anand-review` label again. That will kickstart another review.
+
+## Orchestrating agents - not doing the work yourself.
+
+You should generally invoke other to do the grunt work of making changes to code for you, and verifying those changes. Read the `orchestrate-agents` skill to understand agent orchestration best practice.
