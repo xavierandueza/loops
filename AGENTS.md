@@ -76,6 +76,8 @@ Later dispatches target the same live agent by its deterministic Herdr name:
 herdr agent prompt <agent-name> "/skill:address-pr-comments <structured prompt>"
 ```
 
+`herdr agent prompt` always submits with Enter. If Pi's `keybindings.json` (in `$PI_CODING_AGENT_DIR`, default `~/.pi/agent`) binds `tui.input.submit` without `enter`, the prompt is sent as a bracketed paste with `herdr pane send-text`, then submitted with `herdr agent send-keys <agent-name> <submit-key>`.
+
 The readable Pi session ID remains `loops-pr-{owner}-{repo}-{number}`. The Herdr agent name includes the PR number and a short repository hash so it stays within Herdr's 32-character limit. If the live agent has exited, the same Pi session ID is used when recreating it.
 
 Agent-authored feedback from logins in `src/lib/ignored-agents.ts` is marked seen without being dispatched. The `address-pr-comments` skill should be installed as a Pi skill from `skills/address-pr-comments/SKILL.md`.

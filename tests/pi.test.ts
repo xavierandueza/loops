@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { invokePi } from '../src/lib/pi.js';
 
 vi.mock('child_process', () => ({
@@ -7,13 +10,124 @@ vi.mock('child_process', () => ({
 }));
 
 describe('invokePi', () => {
+  let piAgentDir: string;
+
   beforeEach(() => {
+    piAgentDir = mkdtempSync(join(tmpdir(), 'loops-pi-'));
+    vi.stubEnv('PI_CODING_AGENT_DIR', piAgentDir);
     vi.mocked(spawnSync).mockReset();
     vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>);
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    rmSync(piAgentDir, { recursive: true, force: true });
+  });
+
+  function writeKeybindings(keybindings: Record<string, unknown>): void {
+    writeFileSync(join(piAgentDir, 'keybindings.json'), JSON.stringify(keybindings));
+  }
+
+  function mockExistingAgent(agentStatus = 'idle'): void {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: JSON.stringify({
+        result: {
+          agent: {
+            name: 'loops-pr-42-a1b2c3d4',
+            agent: 'pi',
+            agent_status: agentStatus,
+            pane_id: 'w1:p9',
+          },
+        },
+      }),
+    } as ReturnType<typeof spawnSync>);
+  }
+
+  it('pastes the prompt and sends the configured Pi submit key when it is not Enter', async () => {
+    writeKeybindings({ 'tui.input.submit': 'ctrl+enter', 'tui.input.newLine': ['enter'] });
+    mockExistingAgent();
+
+    await invokePi(
+      'loops-pr-42-a1b2c3d4',
+      'loops-pr-acme-myapp-42',
+      'address-pr-comments',
+      'Fix \x1bthe thing',
+      '/repo',
+    );
+
+    expect(spawnSync).toHaveBeenNthCalledWith(
+      2,
+      'herdr',
+      ['pane', 'send-text', 'w1:p9', '\x1b[200~/skill:address-pr-comments Fix the thing\x1b[201~'],
+      { cwd: '/repo', encoding: 'utf8' },
+    );
+    expect(spawnSync).toHaveBeenNthCalledWith(
+      3,
+      'herdr',
+      ['agent', 'send-keys', 'loops-pr-42-a1b2c3d4', 'ctrl+enter'],
+      { cwd: '/repo', encoding: 'utf8' },
+    );
+    expect(spawnSync).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses Herdr prompt submission when Enter is one of the Pi submit keys', async () => {
+    writeKeybindings({ 'tui.input.submit': ['ctrl+enter', 'enter'] });
+    mockExistingAgent();
+
+    await invokePi('loops-pr-42-a1b2c3d4', 'loops-pr-acme-myapp-42', 'address-pr-comments', 'Fix', '/repo');
+
+    expect(spawnSync).toHaveBeenNthCalledWith(
+      2,
+      'herdr',
+      ['agent', 'prompt', 'loops-pr-42-a1b2c3d4', '/skill:address-pr-comments Fix'],
+      { cwd: '/repo', encoding: 'utf8' },
+    );
+  });
+
+  it('pastes into the new root pane when creating an agent with a custom submit key', async () => {
+    writeKeybindings({ 'tui.input.submit': 'ctrl+enter' });
+    vi.stubEnv('HERDR_WORKSPACE_ID', 'w1');
+    vi.mocked(spawnSync)
+      .mockReturnValueOnce({
+        status: 1,
+        stderr: JSON.stringify({ error: { code: 'agent_not_found', message: 'not found' } }),
+      } as ReturnType<typeof spawnSync>)
+      .mockReturnValueOnce({
+        status: 0,
+        stdout: JSON.stringify({
+          result: {
+            tab: { tab_id: 'w1:t2' },
+            root_pane: { pane_id: 'w1:p2' },
+          },
+        }),
+      } as ReturnType<typeof spawnSync>)
+      .mockReturnValue({ status: 0, stdout: '{}' } as ReturnType<typeof spawnSync>);
+
+    await invokePi('loops-pr-42-a1b2c3d4', 'loops-pr-acme-myapp-42', 'address-pr-comments', 'Fix', '/repo');
+
+    expect(spawnSync).toHaveBeenNthCalledWith(
+      4,
+      'herdr',
+      ['pane', 'send-text', 'w1:p2', '\x1b[200~/skill:address-pr-comments Fix\x1b[201~'],
+      { cwd: '/repo', encoding: 'utf8' },
+    );
+    expect(spawnSync).toHaveBeenNthCalledWith(
+      5,
+      'herdr',
+      ['agent', 'send-keys', 'loops-pr-42-a1b2c3d4', 'ctrl+enter'],
+      { cwd: '/repo', encoding: 'utf8' },
+    );
+  });
+
+  it('refuses to prompt a blocked agent', async () => {
+    mockExistingAgent('blocked');
+
+    await expect(
+      invokePi('loops-pr-42-a1b2c3d4', 'loops-pr-acme-myapp-42', 'address-pr-comments', 'Fix', '/repo'),
+    ).rejects.toThrow('is blocked');
+
+    expect(spawnSync).toHaveBeenCalledTimes(1);
   });
 
   it('prompts an existing Herdr Pi agent', async () => {

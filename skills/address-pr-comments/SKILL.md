@@ -108,7 +108,3 @@ These are automated reviews triggered by the `anand-review` label. If you are ad
 
 - Please also resolve the comments
 - After all comments are addressed, add the `anand-review` label again. That will kickstart another review.
-
-## Orchestrating agents - not doing the work yourself.
-
-You should generally invoke other to do the grunt work of making changes to code for you, and verifying those changes. Read the `orchestrate-agents` skill to understand agent orchestration best practice.
